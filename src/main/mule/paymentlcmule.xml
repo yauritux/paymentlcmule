@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:java="http://www.mulesoft.org/schema/mule/java" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/java http://www.mulesoft.org/schema/mule/java/current/mule-java.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="a5d008d8-5b28-49e0-b99f-31605ebc2a02" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="542b6996-fd2e-41f3-b651-a8526b73ad0a" basePath="/payments" >
+		<http:request-connection host="localhost" port="3000" />
+	</http:request-config>
+	<db:config name="PaymentDBConfig" doc:name="Database Config" doc:id="1be57028-74f3-4abd-9730-2efa6d01fc80" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="v3r44pr1" database="lcm_poc_v1" />
+	</db:config>
+	<ee:object-store-caching-strategy name="Caching_Strategy" doc:name="Caching Strategy" doc:id="b8ee9f8f-e82b-40a0-adc8-3232a0fc2be0" keyGenerationExpression="#[payload.customer_id]" />
+	<http:request-config name="HTTP_Request_LuluPay" doc:name="HTTP Request configuration" doc:id="4c89f7ee-549d-4fb6-8df1-8925746e21e2" basePath="/payments" >
+		<http:request-connection host="localhost" port="3000" />
+	</http:request-config>
+	<flow name="PaymentLCMFlow" doc:id="3b306e2d-ec59-4bc9-8548-438bd189c6ea" >
+		<http:listener doc:name="/POST payments" doc:id="bc154163-7ec6-495f-993e-a02ba5a5b4be" config-ref="HTTP_Listener_config" path="/payments" allowedMethods="POST" outputMimeType="application/json"/>
+		<set-payload value="#[payload]" doc:name="Set Payload" doc:id="ff68cbe6-e2ed-4f82-af07-4ec686852985" />
+		<logger level="INFO" doc:name="Logger" doc:id="1b3a73a9-5776-41a1-afc7-e53e029dcb5e" message='#[payload]'/>
+		<set-variable value="#[payload.customer_id]" doc:name="Set Customer ID" doc:id="9d307635-d728-4a63-840f-814538c71daf" variableName="customerID" />
+		<set-variable value="#[payload.payment_amount]" doc:name="Set Payment Amount" doc:id="584db39e-93a9-44c3-a5f3-fcb356cf6b9a" variableName="paymentAmount" />
+		<set-variable value="#[payload.currency_code]" doc:name="Set Currency" doc:id="3c22baf6-4e31-48f4-bbab-6850de2f2a1a" variableName="currencyCode" />
+		<ee:cache doc:name="Cache" doc:id="57719d9d-38c7-4c37-9bae-20cd0bfa77aa" cachingStrategy-ref="Caching_Strategy">
+			<http:request method="GET" doc:name="Get Customer Info" doc:id="4a947bdc-34b9-4a66-9965-e6297f2dc031" config-ref="HTTP_Request_configuration" path='#["/customers/" ++ payload.customer_id]' />
+		</ee:cache>
+		<set-variable value="#[payload.customer_name]" doc:name="Set Customer Name" doc:id="e62a47ec-d445-416b-8280-2b42584c3966" variableName="customerName"/>
+		<choice doc:name="Choice" doc:id="34bc9437-731d-40c0-b47f-81cfeaae6465" >
+			<when expression="#[payload.active == false]">
+				<raise-error doc:name="Raise Error Inactive Customer" doc:id="1d92af75-1371-4420-a651-558706428590" type="PRECONDITIONS:INACTIVE_CUSTOMER" description="Cannot proceed payment for Inactive Customer"/>
+			</when>
+			<when expression="#[payload.current_balance == 0]">
+				<raise-error doc:name="Raise Error Insufficient Balance" doc:id="064e51d4-8c51-4806-84d2-618fc03e5f38" type="PRECONDITIONS:INSUFFICIENT_BALANCE" description="Cannot proceed payment due to Insufficient Balance"/>
+			</when>
+			<otherwise>
+				<set-variable value="#[payload.payment_config_id]" doc:name="Payment Config ID" doc:id="6423fc83-4f81-442e-9961-d47b7bf65fc6" variableName="paymentConfigID" />
+			</otherwise>
+		</choice>
+		<db:select doc:name="Select Payment Service" doc:id="bf854fd5-9c27-468e-ab6b-28c44505f779" config-ref="PaymentDBConfig">
+			<db:sql ><![CDATA[select * from merchant_service_configs where id = :id;]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	id: vars.paymentConfigID
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="705a055d-5467-45a3-93c3-382955af406c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="f8b99806-538c-4fa1-8dd7-eb1bb8a65880" >
+			<when expression="#[payload.length != 0]">
+				<set-variable value="#[payload[0].service_name]" doc:name="Set Service Name" doc:id="bcf4541c-2a27-4d97-87eb-54b2f6feac1e" variableName="serviceName"/>
+			</when>
+			<otherwise >
+				<raise-error doc:name="Raise Error Payment Config Not Found" doc:id="32683eb4-1e31-4628-ac28-1d214d185d6f" type="PRECONDITIONS:EMPTY_CONFIG" description="Cannot proceed payment. Payment config is empty"/>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="3bf8edb6-7bc0-41bf-818b-114a2c74098a" >
+			<when expression='#[vars.serviceName == "Lulu Pay"]'>
+				<java:new constructor="PaymentConstructorService()" doc:name="Instantiate Payment Constructor Service" doc:id="af7fcabd-ffd3-4d75-a283-52dcfca3ef1a" class="com.pdd.paymentlcmule.PaymentConstructorService" target="paymentRequestObj"/>
+				<java:invoke doc:name="Construct LuluPay Payload" doc:id="a19e1633-5242-43e0-acbe-897a0faff595" instance="#[vars.paymentRequestObj]" class="com.pdd.paymentlcmule.PaymentConstructorService" method="getLuluPaymentRequestModel(java.lang.String,double,java.lang.String)">
+					<java:args ><![CDATA[#[%dw 2.0
+output application/java
+---
+{
+	customerId: vars.customerID as String,
+	paymentAmount: vars.paymentAmount as Number,
+	curr: vars.currencyCode as String
+}]]]></java:args>
+				</java:invoke>
+				<ee:transform doc:name="Transform Message" doc:id="c1c196da-ee6e-4e1b-a132-de7b091ceb14" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"transaction_id": payload.transactionId,
+	"customer_id": payload.customerId,
+	"payment_amount": payload.paymentAmount,
+	"curr": payload.curr,
+	"created_at": payload.createdAt
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<http:request method="POST" doc:name="Call LuluPay Endpoint" doc:id="8a767352-cbbf-4086-8c08-aa86e659d41f" config-ref="HTTP_Request_LuluPay" path="/lulupay" outputMimeType="application/json" sendBodyMode="AUTO" requestStreamingMode="AUTO">
+					<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Accept" : "application/json",
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+				</http:request>
+			</when>
+			<otherwise >
+				<raise-error doc:name="Raise Error Unregistered Payment Provider" doc:id="51246957-db24-44a7-a425-57b527d4d3eb" type="PRECONDITIONS:UNREGISTERED_PROVIDER" description="Payment failed due to unregistered payment provider"/>
+			</otherwise>
+		</choice>
+		<error-handler>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="257417ee-cf47-48f8-9a47-38788e6dd97b" type="PRECONDITIONS:INACTIVE_CUSTOMER">
+				<ee:transform doc:name="Transform Message" doc:id="9ec3f64e-cf91-4aa9-9362-0d218bd22efb" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"statusCode": "400",
+	"message": "Cannot proceed payment for Customer " ++ vars.customerName,
+	"reason": "Inactive Customer"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="a360bf62-aa04-4a48-a542-f3543072331b" type="PRECONDITIONS:INSUFFICIENT_BALANCE">
+				<ee:transform doc:name="Transform Message" doc:id="a6cea149-677a-48f3-9642-6885f183a49a" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"statusCode": "400",
+	"message": "Cannot proceed payment for Customer " ++ vars.customerName,
+	"reason": "Insufficient Balance"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="06dcfd70-a82c-4034-9bbe-b20187e3a7f4" type="PRECONDITIONS:UNREGISTERED_PROVIDER">
+				<ee:transform doc:name="Transform Message" doc:id="336dde41-b31d-4221-92db-171fd615cc0d" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"statusCode": "400",
+	"message": "Cannot proceed payment",
+	"reason": "Unregistered Payment Provider"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="c13204da-c725-4cc8-b260-515e7d51f970" type="PRECONDITIONS:EMPTY_CONFIG">
+				<ee:transform doc:name="Transform Message" doc:id="55d8471a-7302-44fb-b937-aacf6268c75e" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"statusCode": "400",
+	"message": "Cannot proceed payment",
+	"reason": "Cannot find Payment Service Configuration"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+</mule>
