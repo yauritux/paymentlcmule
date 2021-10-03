@@ -24,7 +24,7 @@ docker-compose up
 ## Test the Endpoint
 
 ```
-curl -X POST -H 'Content-Type: application/json' -d '{"merchant_id": <merchant_id>, "customer_id": <customer_id>, "payment_amount": <amount>, "currency_code": <currency_code>}' http://localhost:8081/payments
+curl -X POST -H 'Content-Type: application/json' -d '{"merchant_id": <merchant_id>, "customer_id": <customer_id>, "payment_amount": <amount>, "currency_code": <currency_code>}' http://localhost:9000/payments
 ```
 
 1. You can get the `merchant_id` from the database. E.g.: 8282c796-19c7-11ec-83c1-0242ac110003
@@ -37,7 +37,7 @@ curl -X POST -H 'Content-Type: application/json' -d '{"merchant_id": <merchant_i
 
 E.g. : 
 ```
-curl -X POST -H 'Content-Type: application/json' -d '{"merchant_id": "8282c796-19c7-11ec-83c1-0242ac110003", "customer_id": "001", "payment_amount": 5000, "currency_code": "USD"}' http://localhost:8081/payments
+curl -X POST -H 'Content-Type: application/json' -d '{"merchant_id": "8282c796-19c7-11ec-83c1-0242ac110003", "customer_id": "001", "payment_amount": 5000, "currency_code": "USD"}' http://localhost:9000/payments
 ```
 
 You'll end up with getting one of these following responses:
