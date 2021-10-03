@@ -14,7 +14,7 @@ http://www.mulesoft.org/schema/mule/java http://www.mulesoft.org/schema/mule/jav
 		<http:request-connection host="localhost" port="3000" />
 	</http:request-config>
 	<db:config name="PaymentDBConfig" doc:name="Database Config" doc:id="1be57028-74f3-4abd-9730-2efa6d01fc80" >
-		<db:my-sql-connection host="localhost" port="3306" user="root" password="v3r44pr1" database="lcm_poc_v1" />
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="secret123" database="lcm_poc_v1" />
 	</db:config>
 	<ee:object-store-caching-strategy name="Caching_Strategy" doc:name="Caching Strategy" doc:id="b8ee9f8f-e82b-40a0-adc8-3232a0fc2be0" keyGenerationExpression="#[payload.customer_id]" />
 	<http:request-config name="HTTP_Request_LuluPay" doc:name="HTTP Request configuration" doc:id="4c89f7ee-549d-4fb6-8df1-8925746e21e2" basePath="/payments" >
